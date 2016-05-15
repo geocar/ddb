@@ -10,7 +10,7 @@
 -export([get_item/6]).
 -export([list_tables/1]).
 -export([put_item/3]).
--export([update_item/5]).
+-export([update_item/5, update_item/4]).
 -export([scan/2, scan/3, scan/4, scan/6]).
 
 -export_type([config/0]).
@@ -259,10 +259,10 @@ delete_table_payload(TableName) ->
     jsonx:encode(Json).
 
 
--spec update_item(#ddb_config{}, binary(), binary(), binary(), [{binary(), binary(), binary()}]) -> term().
-update_item(Config, TableName, Key, Value, AttributeUpdates) ->
+-spec update_item(#ddb_config{}, binary(), [{binary(), [{binary(),binary()}]}], [{binary(), binary(), binary()}]) -> term().
+update_item(Config, TableName, KTV, AttributeUpdates) ->
     Target = x_amz_target(update_item),
-    Payload = update_item_payload(TableName, Key, Value, AttributeUpdates),
+    Payload = update_item_payload(TableName, KTV, AttributeUpdates),
     case post(Config, Target, Payload) of
         {ok, _Json} ->
             ok;
@@ -271,25 +271,20 @@ update_item(Config, TableName, Key, Value, AttributeUpdates) ->
             error(Reason)
     end.
 
+-spec update_item(#ddb_config{}, binary(), binary(), binary(), [{binary(), binary(), binary()}]) -> term().
+update_item(Config, TableName, Key, Value, AttributeUpdates) ->
+    update_item(Config, TableName, [typed_attribute({Key, Value})], AttributeUpdates).
+
 
 %% AttributeUpdates [{AttributeName, Action, Value}] 
-update_item_payload(TableName, Key, Value, AttributeUpdates) when is_binary(Value) ->
-    update_item_payload(TableName, Key, <<"S">>, Value, AttributeUpdates);
-update_item_payload(TableName, Key, Value, AttributeUpdates) when is_integer(Value) ->
-    update_item_payload(TableName, Key, <<"N">>, Value, AttributeUpdates).
-
-
-update_item_payload(TableName, Key, Type, Value, AttributeUpdates) ->
-    F = fun({AttributeName, Action, V}) when is_binary(V) ->
+update_item_payload(TableName, KTV, AttributeUpdates) ->
+    F = fun({AttributeName, Action, V}) ->
                 {AttributeName, [{<<"Action">>, Action},
-                                 {<<"Value">>, [{<<"S">>, V}]}]};
-           ({AttributeName, Action, V}) when is_integer(V) ->
-                {AttributeName, [{<<"Action">>, Action},
-                                 {<<"Value">>, [{<<"N">>, integer_to_binary(V)}]}]}
+                                 {<<"Value">>, typed_value(V)}]}
         end,
     AttributeUpdates1 = lists:map(F, AttributeUpdates),
     Json = [{<<"TableName">>, TableName},
-            {<<"Key">>, [{Key, [{Type, Value}]}]},
+            {<<"Key">>, KTV},
             {<<"AttributeUpdates">>, AttributeUpdates1}],
     jsonx:encode(Json).
 
