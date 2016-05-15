@@ -168,9 +168,9 @@ list_tables(Config) ->
     end.
 
 
-create_table(Config, TableName, AttributeName, KeyType) ->
+create_table(Config, TableName, Keys) ->
     Target = x_amz_target(create_table),
-    Payload = create_table_payload(TableName, AttributeName, KeyType),
+    Payload = create_table_payload(TableName, Keys),
     case post(Config, Target, Payload) of
         {ok, _Json} ->
             ok;
@@ -178,10 +178,23 @@ create_table(Config, TableName, AttributeName, KeyType) ->
             ?debugVal(Reason),
             error(Reason)
     end.
+create_table(Config, TableName, AttributeName, KeyType) ->
+    create_table(Config, TableName, [{AttributeName, KeyType}]).
 
+attribute_definition_payload({AttributeName,_}) ->
+    [
+        {<<"AttributeName">>, AttributeName},
+        {<<"AttributeType">>, <<"S">>}
+    ].
+
+key_schema_payload({AttributeName,KeyType}) ->
+    [
+        {<<"AttributeName">>, AttributeName},
+        {<<"KeyType">>, KeyType}
+    ].
 
 %% KeyType HASH RANGE
-create_table_payload(TableName, AttributeName, KeyType) ->
+create_table_payload(TableName, List) ->
     %% http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CreateTable.html
     Json = [
         {
@@ -189,10 +202,7 @@ create_table_payload(TableName, AttributeName, KeyType) ->
         },
         {
             <<"AttributeDefinitions">>,
-            [[
-                {<<"AttributeName">>, AttributeName},
-                {<<"AttributeType">>, <<"S">>}
-            ]]
+            lists:map(fun attribute_definition_payload/1, List)
         },
         {
             <<"ProvisionedThroughput">>,
@@ -203,10 +213,7 @@ create_table_payload(TableName, AttributeName, KeyType) ->
         },
         {
             <<"KeySchema">>,
-            [[
-                {<<"AttributeName">>, AttributeName},
-                {<<"KeyType">>, KeyType}
-            ]]
+            lists:map(fun key_schema_payload/1, List)
         }
     ],
     jsonx:encode(Json).
