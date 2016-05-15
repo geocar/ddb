@@ -4,7 +4,7 @@
 -export([connection_local/0, connection_local/2]).
 
 -export([create_table/4, create_table/3]).
--export([delete_item/4]).
+-export([delete_item/4, delete_item/3]).
 -export([delete_table/2]).
 -export([get_item/4]).
 -export([get_item/6]).
@@ -141,7 +141,9 @@ get_item_payload(TableName, HashKey, HashValue, RangeKey, RangeValue) ->
     jsonx:encode(Json).
 
 
-typed_item(Item) ->
+typed_item(Item) when is_tuple(Item) ->
+    [typed_attribute(Item)];
+typed_item(Item) when is_list(Item) ->
     lists:map(fun typed_attribute/1, Item).
 
 
@@ -149,8 +151,16 @@ typed_attribute({Key, Value}) ->
     {Key, typed_value(Value)}.
 
 
+typed_value(Value) when is_tuple(Value) ->
+    [Value];
+typed_value([{Type,Value}]) ->
+    [{Type,Value}];
 typed_value(Value) when is_binary(Value) ->
     [{<<"S">>, Value}];
+typed_value(Value) when is_atom(Value) ->
+    [{<<"S">>, list_to_binary(atom_to_list(Value))}];
+typed_value(Value) when is_list(Value) ->
+    [{<<"S">>, list_to_binary(Value)}];
 typed_value(Value) when is_integer(Value) ->
     [{<<"N">>, integer_to_binary(Value)}].
 
@@ -220,8 +230,11 @@ create_table_payload(TableName, List) ->
 
 
 delete_item(Config, TableName, Key, Value) ->
+    delete_item(Config, TableName, {Key, Value}).
+
+delete_item(Config, TableName, KV) ->
     Target = x_amz_target(delete_item),
-    Payload = delete_item_payload(TableName, Key, Value),
+    Payload = delete_item_payload(TableName, KV),
     case post(Config, Target, Payload) of
         {ok, _Json} ->
             ok;
@@ -231,15 +244,9 @@ delete_item(Config, TableName, Key, Value) ->
     end.
 
 
-%% FIXME(nakai): S/N しかない
-delete_item_payload(TableName, Key, Value) when is_binary(Value) ->
-    delete_item_payload(TableName, Key, <<"S">>, Value);
-delete_item_payload(TableName, Key, Value) when is_binary(Value) ->
-    delete_item_payload(TableName, Key, <<"N">>, Value).
-
-delete_item_payload(TableName, Key, Type, Value) ->
+delete_item_payload(TableName, KV) ->
     Json = [{<<"TableName">>, TableName},
-            {<<"Key">>, [{Key, [{Type, Value}]}]}],
+            {<<"Key">>, typed_item(KV)}],
     jsonx:encode(Json).
 
 
@@ -273,18 +280,18 @@ update_item(Config, TableName, KTV, AttributeUpdates) ->
 
 -spec update_item(#ddb_config{}, binary(), binary(), binary(), [{binary(), binary(), binary()}]) -> term().
 update_item(Config, TableName, Key, Value, AttributeUpdates) ->
-    update_item(Config, TableName, [typed_attribute({Key, Value})], AttributeUpdates).
+    update_item(Config, TableName, [{Key, Value}], AttributeUpdates).
 
 
 %% AttributeUpdates [{AttributeName, Action, Value}] 
-update_item_payload(TableName, KTV, AttributeUpdates) ->
+update_item_payload(TableName, KV, AttributeUpdates) ->
     F = fun({AttributeName, Action, V}) ->
                 {AttributeName, [{<<"Action">>, Action},
                                  {<<"Value">>, typed_value(V)}]}
         end,
     AttributeUpdates1 = lists:map(F, AttributeUpdates),
     Json = [{<<"TableName">>, TableName},
-            {<<"Key">>, KTV},
+            {<<"Key">>, typed_item(KV)},
             {<<"AttributeUpdates">>, AttributeUpdates1}],
     jsonx:encode(Json).
 
