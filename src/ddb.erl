@@ -6,8 +6,7 @@
 -export([create_table/4, create_table/3]).
 -export([delete_item/4, delete_item/3]).
 -export([delete_table/2]).
--export([get_item/4]).
--export([get_item/6]).
+-export([get_item/3, get_item/4, get_item/6]).
 -export([list_tables/1]).
 -export([put_item/3]).
 -export([update_item/5, update_item/4]).
@@ -100,10 +99,16 @@ put_item_payload(TableName, Item) ->
 
 %% テーブルの主キーはhashタイプ(1要素主キー)と、hash-and-rangeタイプ(2要素で主キー)があり得る
 %% http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CreateTable.html
--spec get_item(#ddb_config{}, binary(), binary(), binary()) -> not_found | [{binary(), binary()}].
-get_item(Config, TableName, HashKey, HashValue) ->
+-spec get_item(#ddb_config{}, binary(), binary()) -> not_found | [{binary(), binary()}].
+get_item(Config, TableName, KV) ->
     Target = x_amz_target(get_item),
-    Payload = get_item_payload(TableName, HashKey, HashValue),
+    Payload = get_item_payload(TableName, KV),
+    get_item_request(Config, Target, Payload).
+
+-spec get_item(#ddb_config{}, binary(), binary(), binary()) -> not_found | [{binary(), binary()}].
+get_item(Config, TableName, Key, Value) ->
+    Target = x_amz_target(get_item),
+    Payload = get_item_payload(TableName, {Key, Value}),
     get_item_request(Config, Target, Payload).
 
 -spec get_item(#ddb_config{}, binary(), binary(), binary(), binary(), binary()) -> not_found | [{binary(), binary()}].
@@ -126,10 +131,10 @@ get_item_request(Config, Target, Payload) ->
     end.
 
 
-get_item_payload(TableName, HashKey, HashValue) ->
+get_item_payload(TableName, KV) ->
     %% http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_GetItem.html
     Json = [{<<"TableName">>, TableName},
-            {<<"Key">>, typed_item([{HashKey, HashValue}])},
+            {<<"Key">>, typed_item(KV)},
             {<<"ConsistentRead">>, true}],
     jsonx:encode(Json).
 
