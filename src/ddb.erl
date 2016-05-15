@@ -3,7 +3,7 @@
 -export([connection/4]).
 -export([connection_local/0, connection_local/2]).
 
--export([create_table/4]).
+-export([create_table/4, create_table/3]).
 -export([delete_item/4]).
 -export([delete_table/2]).
 -export([get_item/4]).
