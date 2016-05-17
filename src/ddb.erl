@@ -34,23 +34,26 @@
 -type config() :: #ddb_config{}.
 
 %% jsonx -> ejson(jiffy)
-je([{K,V}])           -> {[{K,je(V)}]};
-je([{K,V}|T])         -> {R}=je(T), {[{K,je(V)}]++R};
-je(A) when is_list(A) -> lists:map(fun je/1, A);
-je({A})               -> {je(A)};
-je(X)                 -> X.
-
-json_encode(A) -> jiffy:encode(je(A)).
+%je([{K,V}])           -> {[{K,je(V)}]};
+%je([{K,V}|T])         -> {R}=je(T), {[{K,je(V)}]++R};
+%je(A) when is_list(A) -> lists:map(fun je/1, A);
+%je({A})               -> {je(A)};
+%je(X)                 -> X.
+%
+%json_encode(A) -> jiffy:encode(je(A)).
 
 
 %% ejson -> jsonx
-jd({[{K,V}]})   -> [{K,jd(V)}];
-jd({[{K,V}|T]}) -> [{K,jd(V)}] ++ jd({T});
-jd(A) when is_list(A) -> lists:map(fun jd/1, A);
-jd(X)           -> X.
+%jd({[{K,V}]})   -> [{K,jd(V)}];
+%jd({[{K,V}|T]}) -> [{K,jd(V)}] ++ jd({T});
+%jd(A) when is_list(A) -> lists:map(fun jd/1, A);
+%jd(X)           -> X.
+%
+%json_decode(A) -> jd(jiffy:decode(A)).
 
-json_decode(A) -> jd(jiffy:decode(A)).
 
+json_encode(A) -> jsone:encode(A).
+json_decode(A) -> jsone:decode(A, [{object_format,proplist}]).
 
 % json_encode(A) -> jsonx:encode(A).
 % json_decode(A) -> jsonx:decode(A, [{format,proplist}]).
@@ -142,8 +145,9 @@ get_item(Config, TableName, HashKey, HashValue, RangeKey, RangeValue) ->
 
 get_item_request(Config, Target, Payload) ->
     case post(Config, Target, Payload) of
-        {ok, []}   -> not_found;
-        {ok, {[]}} -> not_found;
+        {ok, []}   -> not_found; % jsonx
+        {ok, {[]}} -> not_found; % jiffy
+        {ok, [{}]} -> not_found; % jsone
         {ok, Json} ->
             %% XXX(nakai): Item はあえて出している
             cast_item(proplists:get_value(<<"Item">>, Json));
