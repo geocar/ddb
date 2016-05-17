@@ -94,11 +94,13 @@ trimall(Value) ->
             TrimedValue
     end.
 
+%
+to_lower(B) -> << << (string:to_lower(C)) >> || << C >> <= B >>.
 
 %% content-length;content-type;host;user-agent;x-amz-content-sha256;x-amz-date;x-amz-target
 -spec canonical_headers([{binary(), binary()}]) -> {binary(), binary()}.
 canonical_headers(Headers) ->
-    Normalized = [ {cowboy_bstr:to_lower(Name), trimall(Value)} || {Name, Value} <- Headers],
+    Normalized = [ {to_lower(Name), trimall(Value)} || {Name, Value} <- Headers],
     Sorted = lists:keysort(1, Normalized),
     Canonical = << <<Name/binary, $:, Value/binary, $\n>> || {Name, Value} <- Sorted >>,
     %% XXX(nakai): 効率悪い
