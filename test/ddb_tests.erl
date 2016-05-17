@@ -35,18 +35,6 @@
 %%     ok.
 
 
-host() ->
-    %% Mac or Linux 以外は考えていない
-    case os:type() of
-        {unix,darwin} ->
-            %% Mac だったら boot2docker 使っるはず？
-            Result = ?cmd("boot2docker ip 2> /dev/null"),
-            list_to_binary(string:strip(Result, right, $\n));
-        _ ->
-            <<"localhost">>
-    end.
-
-
 connection_local_test_() ->
     {setup,
      fun() ->
@@ -76,7 +64,7 @@ connection_local_test_() ->
 
 
 success() ->
-    C = ddb:connection_local(host(), 8000),
+    C = ddb:connection_local(),
     ?assertEqual([],
 		 ddb:list_tables(C)),
     ?assertEqual(ok,
