@@ -6,12 +6,17 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-hmacsha256(Key, Sign) when erlang:function_exported(crypto, hmac, 3) -> crypto:hmac(sha256, Key, Sign);
-hmacsha256(Key, Sign) when erlang:function_exported(crypto, sha256_mac_n, 3) -> crypto:sha256_mac_n(Key, Sign, 32).
+hmacsha256(Key, Sign) ->
+  case erlang:function_exported(crypto, hmac, 3) of
+    true -> crypto:hmac(sha256, Key, Sign);
+    false -> crypto:sha256_mac_n(Key, Sign, 32)
+  end.
 
-sha256(Text) when erlang:function_exported(crypto, hash, 2) -> crypto:hash(sha256, Text);
-sha256(Text) when erlang:function_exported(crypto, sha256, 2) -> crypto:sha256(Text).
-
+sha256(Text) ->
+  case erlang:function_exported(crypto, hash, 2) of
+    true -> crypto:hash(sha256, Text);
+    false -> crypto:sha256(Text)
+  end.
 
 %% 20110909T233600Z
 -spec iso_8601_basic_format(erlang:timestamp()) -> binary().
