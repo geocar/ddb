@@ -7,15 +7,15 @@
 -include_lib("eunit/include/eunit.hrl").
 
 hmacsha256(Key, Sign) ->
-  case erlang:function_exported(crypto, hmac, 3) of
-    true -> crypto:hmac(sha256, Key, Sign);
-    false -> crypto:sha256_mac_n(Key, Sign, 32)
+  case erlang:function_exported(crypto, sha256_mac_n, 3) of
+    true  -> crypto:sha256_mac_n(Key, Sign, 32);
+    false -> crypto:hmac(sha256, Key, Sign)
   end.
 
 sha256(Text) ->
-  case erlang:function_exported(crypto, hash, 2) of
-    true -> crypto:hash(sha256, Text);
-    false -> crypto:sha256(Text)
+  case erlang:function_exported(crypto, sha256, 1) of
+    true -> crypto:sha256(Text);
+    false -> crypto:hash(sha256, Text)
   end.
 
 %% 20110909T233600Z
