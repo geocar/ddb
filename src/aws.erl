@@ -49,8 +49,7 @@ hash_encode(Value) ->
     base16(sha256(Value)).
 
 
-base16(Value) ->
-    list_to_binary(io_lib:format("~64.16.0b", [binary:decode_unsigned(Value)])).
+base16(Value) -> bin_to_hex:bin_to_hex(Value).
 
 
 -spec credential_scope(binary(), binary(), binary()) -> binary().
