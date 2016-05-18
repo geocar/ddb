@@ -6,6 +6,13 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+hmacsha256(Key, Sign) when erlang:function_exported(crypto, hmac, 3) -> crypto:hmac(sha256, Key, Sign);
+hmacsha256(Key, Sign) when erlang:function_exported(crypto, sha256_mac_n, 3) -> crypto:sha256_mac_n(Key, Sign, 32).
+
+sha256(Text) when erlang:function_exported(crypto, hash, 2) -> crypto:hash(sha256, Text);
+sha256(Text) when erlang:function_exported(crypto, sha256, 2) -> crypto:sha256(Text).
+
+
 %% 20110909T233600Z
 -spec iso_8601_basic_format(erlang:timestamp()) -> binary().
 iso_8601_basic_format(Timestamp) ->
@@ -26,7 +33,7 @@ signature_version_4_signing(DateTime, AccessKeyId, SecretAccessKey, Headers, Pay
 
     ToSign = to_sign(DateTime, CredentialScope, Request),
     SigningKey = signing_key(SecretAccessKey, DateTime, Region, Service),
-    Signature = base16(crypto:hmac(sha256, SigningKey, ToSign)),
+    Signature = base16(hmacsha256(SigningKey, ToSign)),
     Authorization = authorization(AccessKeyId, CredentialScope, SignedHeaders, Signature),
     [{<<"Authorization">>, Authorization}|Headers1].
 
@@ -39,7 +46,7 @@ to_sign(Datetime, CredentialScope, Request) ->
 
 
 hash_encode(Value) ->
-    base16(crypto:hash(sha256, Value)).
+    base16(sha256(Value)).
 
 
 base16(Value) ->
@@ -75,11 +82,11 @@ signing_key(SecretAccessKey, DateTime, Region, Service) ->
 
     %% XXX(nakai): KSecret はあえて変数へ代入してる
     KSecret = SecretAccessKey,
-    KDate = crypto:hmac(sha256, <<"AWS4", KSecret/binary>>, Date),
-    KRegion = crypto:hmac(sha256, KDate, Region),
-    KService = crypto:hmac(sha256, KRegion, Service),
+    KDate = hmacsha256(<<"AWS4", KSecret/binary>>, Date),
+    KRegion = hmacsha256(KDate, Region),
+    KService = hmacsha256(KRegion, Service),
     %% XXX(nakai): KSigning はあえて変数へ代入してる
-    KSigning = crypto:hmac(sha256, KService, <<"aws4_request">>),
+    KSigning = hmacsha256(KService, <<"aws4_request">>),
     KSigning.
 
 
@@ -178,7 +185,7 @@ signature_test() ->
 
     ToSign = to_sign(DateTime, CredentialScope, Request),
 
-    Signature = base16(crypto:hmac(sha256, SigningKey, ToSign)),
+    Signature = base16(hmacsha256(SigningKey, ToSign)),
 
     ?assertEqual(<<"ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c">>, Signature),
 
