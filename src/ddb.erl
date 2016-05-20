@@ -466,14 +466,12 @@ post(#ddb_config{
     case hackney:post(Url, Headers1, Payload, [{pool, default}]) of
         {ok, 200, _RespHeaders, ClientRef} ->
             {ok, Body} = hackney:body(ClientRef),
-            hackney:close(ClientRef),
             {ok, json_decode(Body)};
         {ok, _StatusCode, _RespHeaders, ClientRef} ->
             {ok, Body} = hackney:body(ClientRef),
             Json = json_decode(Body),
             Type = proplists:get_value(<<"__type">>, Json),
             Message = proplists:get_value(<<"Message">>, Json),
-            hackney:close(ClientRef),
             {error, {Type, Message}}
     end.
 
