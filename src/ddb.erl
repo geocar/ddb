@@ -22,12 +22,8 @@
   credentials :: aws:credentials(),
           is_secure = true :: boolean(),
           endpoint :: binary(),
-          service :: binary(),
-          region :: binary(),
-
-          local = false :: boolean(),
-          host :: binary(),
-          port :: inet:port_number()
+          service = ?SERVICE :: binary(),
+          region :: binary()
          }).
 
 -type config() :: #ddb_config{}.
@@ -82,7 +78,6 @@ connection(AccessKeyId, SecretAccessKey, Region, IsSecure) ->
        credentials = aws:credentials(AccessKeyId, SecretAccessKey),
        region = Region,
        is_secure = IsSecure,
-       service = ?SERVICE,
        endpoint = aws:endpoint(?SERVICE, Region)
       }.
 
@@ -92,13 +87,9 @@ connection_local() ->
 
 connection_local(Host, Port) ->
     #ddb_config{
-       host = Host,
-       port = Port,
        credentials = aws:credentials(<<"whatever">>, <<"whatever">>),
        endpoint = <<Host/binary, $:, (integer_to_binary(Port))/binary>>,
        region = <<"ap-northeast-1">>,
-       service = ?SERVICE,
-       local = true,
        is_secure = false
       }.
 
