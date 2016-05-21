@@ -30,13 +30,16 @@ credentials(Credentials = #credentials{ expires = Expires, imds_role = Name }) w
   Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
   case Now > Expires of true -> Credentials; false -> credentials(imds:iam(Name)) end;
 credentials(Info) ->
-  Expires = calendar:datetime_to_gregorian_seconds(iso8601:parse(proplists:get_value(<<"Expiration">>, Info))),
+  
+
+calendar:datetime_to_gregorian_seconds(iso8601:parse()),
+  Expiration = proplists:get_value(<<"Expiration">>, Info),
   #credentials{
     access_key_id = proplists:get_value(<<"AccessKeyId">>, Info),
     secret_access_key = proplists:get_value(<<"SecretAccessKey">>, Info),
     imds_role = proplists:get_value(<<"Name">>, Info),
     token = proplists:get_value(<<"Token">>, Info),
-    expires = Expires
+    expires = (case is_binary(Expiration) of true -> calendar:datetime_to_gregorian_seconds(iso8601:parse(Expiration)); _ -> undefined end)
   }.
 
 credentials(AccessKeyId, SecretAccessKey) ->
