@@ -9,75 +9,35 @@
 -export([endpoint/2, credentials/1, credentials/2]).
 
 -record(credentials, {
-  access_key_id :: binary(),
-  secret_access_key :: binary(),
-  token   :: 'undefined' | binary(),
-  expires :: 'undefined' | integer()
+  access_key_id     = <<"WHATEVER">> :: binary(),
+  secret_access_key = <<"WHATEVER">> :: binary(),
+
+  imds_role :: binary(),
+  token     :: binary(),
+  expires   :: integer()
 }).
 
 -define(OVERLAPIAM, 300).
-
--spec refresh_iam(#credentials{}, binary()) -> #credentials{}.
-refresh_iam(Credentials = #credentials{access_key_id = AccessKeyId, secret_access_key = SecretAccessKey}, Region) -> 
-    DateTime = aws:iso_8601_basic_format(os:timestamp()),
-    Service = <<"sts">>,
-    Endpoint = endpoint(Service, Region),
-
-    QueryString = <<"Action=GetSessionToken&AWSAccessKeyId=", AccessKeyId/binary,
-                   "&SignatureMethod=HmacSHA1&SignatureVersion=2&Timestamp=", DateTime/binary,
-                   "&Version=2011-06-15">>,
-    Payload = <<"GET\n/\n", QueryString/binary>>,
-    
-    Signature = base64:encode_to_string(crypto:hmac(sha, SecretAccessKey, Payload)),
-    Url = <<"https://", Endpoint/binary, "/?", QueryString/binary, "&Signature=", Signature>>,
-    case hackney:get(Url, [], [{pool, default}]) of
-      {ok, 200, _, ClientRef} ->
-          {ok, Body} = hackney:body(ClientRef),
-          NewToken = parse_iam_response(Body),
-          Expires = calendar:datetime_to_gregorian_seconds(iso8601:parse(proplists:get_value(expiration, NewToken))),
-          Credentials#credentials{
-            access_key_id = proplists:get_value(access_key_id, NewToken),
-            secret_access_key = proplists:get_value(secret_access_key, NewToken),
-            token = proplists:get_value(token, NewToken),
-            expires = Expires
-          };
-      _ -> Credentials
-    end.
-
--include_lib("xmerl/include/xmerl.hrl").
-
-parse_iam_response(Body) ->
-    {Parsed, _Misc} = xmerl_scan:string(Body),
-    xmerl_xs:xslapply(fun iam_response_template/1,
-                      xmerl_xs:select("/GetSessionTokenResponse/GetSessionTokenResult/Credentials/*", Parsed)).
-
-iam_response_template(#xmlElement{name='SessionToken', content=[#xmlText{value=C}]})    -> {token, C};
-iam_response_template(#xmlElement{name='SecretAccessKey', content=[#xmlText{value=C}]}) -> {secret_access_key, C};
-iam_response_template(#xmlElement{name='AccessKeyId', content=[#xmlText{value=C}]})     -> {access_key_id, C};
-iam_response_template(#xmlElement{name='Expiration', content=[#xmlText{value=C}]})      -> {expiration, C}.
-
 
 -spec endpoint(binary(), binary()) -> binary().
 endpoint(Service, Region) ->
     <<Service/binary, $., Region/binary, $., "amazonaws.com">>.
 
 
--spec credentials(list({atom(),any()})) -> #credentials{}.
-
+-spec credentials(binary() | #credentials{} | list({atom(),any()})) -> #credentials{}.
+credentials(Name) when is_binary(Name) -> credentials(imds:iam(Name));
+credentials(Credentials = #credentials{ expires = Expires, imds_role = Name }) when is_integer(Expires) ->
+  Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
+  case Now > Expires of true -> Credentials; false -> credentials(imds:iam(Name)) end;
 credentials(Info) ->
   Expires = calendar:datetime_to_gregorian_seconds(iso8601:parse(proplists:get_value(<<"Expiration">>, Info))),
   #credentials{
     access_key_id = proplists:get_value(<<"AccessKeyId">>, Info),
     secret_access_key = proplists:get_value(<<"SecretAccessKey">>, Info),
+    imds_role = proplists:get_value(<<"Name">>, Info),
     token = proplists:get_value(<<"Token">>, Info),
     expires = Expires
   }.
-
--spec credentials(#credentials{} | binary(), binary()) -> #credentials{}.
-
-credentials(Credentials = #credentials{ expires = Expires }, Region) when is_integer(Expires) ->
-  Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
-  case Now > Expires of true -> Credentials; false -> refresh_iam(Credentials, Region) end;
 
 credentials(AccessKeyId, SecretAccessKey) ->
   #credentials{

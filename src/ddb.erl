@@ -70,7 +70,7 @@ connection(Config = #ddb_config{credentials = Credentials}) ->
 connection(IAMName) ->
     Region = imds:region(),
     #ddb_config{
-      credentials = aws:credentials(imds:iam(IAMName)),
+      credentials = aws:credentials(IAMName),
       region = Region,
       is_secure = false,
       endpoint = aws:endpoint(?SERVICE, Region)

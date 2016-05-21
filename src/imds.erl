@@ -8,7 +8,7 @@ text(Path) ->
 json(Path) -> jsone:decode(text(Path), [{object_format,proplist}]).
 
 region() -> text(<<"placement/availability-zone">>).
-iam(Name) -> json(<<"iam/security-credentials/", Name/binary>>).
+iam(Name) -> json(<<"iam/security-credentials/", Name/binary>>) ++ [{<<"Name">>, Name}].
   
 
 
