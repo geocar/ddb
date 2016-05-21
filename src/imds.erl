@@ -7,7 +7,7 @@ text(Path) ->
   Body.
 json(Path) -> jsone:decode(text(Path), [{object_format,proplist}]).
 
-region() -> proplists:get_value(<<"region">>, json(<<"dynamic/instance-identity/document">)).
+region() -> proplists:get_value(<<"region">>, json(<<"dynamic/instance-identity/document">>)).
 
 iam(Name) -> json(<<"meta-data/iam/security-credentials/", Name/binary>>) ++ [{<<"Name">>, Name}].
 
