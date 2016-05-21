@@ -1,6 +1,6 @@
 -module(ddb).
 
--export([connection/4]).
+-export([connection/1, connection/4]).
 -export([connection_local/0, connection_local/2]).
 
 -export([create_table/4, create_table/3]).
@@ -19,8 +19,7 @@
 -define(SERVICE, <<"dynamodb">>).
 
 -record(ddb_config, {
-          access_key_id :: binary(),
-          secret_access_key :: binary(),
+  credentials :: aws:credentials(),
           is_secure = true :: boolean(),
           endpoint :: binary(),
           service :: binary(),
@@ -63,21 +62,29 @@ json_decode(A) -> jsone:decode(A, [{object_format,proplist}]).
 
 %% XXX(nakai): サービスの扱いをどうするか考える
 
+-spec connection(#ddb_config{} | binary()) -> #ddb_config{}.
+
+connection(Config = #ddb_config{credentials = Credentials}) ->
+  Config#ddb_config{ credentials = aws:credentials(Credentials) };
+
+connection(IAMName) ->
+    Region = imds:region(),
+    #ddb_config{
+      credentials = aws:credentials(imds:iam(IAMName)),
+      region = Region,
+      is_secure = false,
+      endpoint = aws:endpoint(?SERVICE, Region)
+    }.
+
 -spec connection(binary(), binary(), binary(), boolean()) -> #ddb_config{}.
 connection(AccessKeyId, SecretAccessKey, Region, IsSecure) ->
     #ddb_config{
-       access_key_id = AccessKeyId,
-       secret_access_key = SecretAccessKey,
+       credentials = aws:credentials(AccessKeyId, SecretAccessKey),
        region = Region,
        is_secure = IsSecure,
        service = ?SERVICE,
-       endpoint = endpoint(?SERVICE, Region)
+       endpoint = aws:endpoint(?SERVICE, Region)
       }.
-
-
--spec endpoint(binary(), binary()) -> binary().
-endpoint(Service, Region) ->
-    <<Service/binary, $., Region/binary, $., "amazonaws.com">>.
 
 
 connection_local() ->
@@ -87,8 +94,7 @@ connection_local(Host, Port) ->
     #ddb_config{
        host = Host,
        port = Port,
-       access_key_id = <<"ACCESS_KEY_ID">>,
-       secret_access_key = <<"SECRET_ACCESS_KEY">>,
+       credentials = aws:credentials(<<"whatever">>, <<"whatever">>),
        endpoint = <<Host/binary, $:, (integer_to_binary(Port))/binary>>,
        region = <<"ap-northeast-1">>,
        service = ?SERVICE,
@@ -446,8 +452,7 @@ url(false, Endpoint) ->
 
 
 post(#ddb_config{
-        access_key_id = AccessKeyId,
-        secret_access_key = SecretAccessKey,
+        credentials = Credentials,
         service = Service,
         region = Region,
         endpoint = Endpoint,
@@ -456,7 +461,7 @@ post(#ddb_config{
     Headers0 = [{<<"x-amz-target">>, Target}, 
                 {<<"host">>, Endpoint}],
     DateTime = aws:iso_8601_basic_format(os:timestamp()),
-    Headers = aws:signature_version_4_signing(DateTime, AccessKeyId, SecretAccessKey, Headers0,
+    Headers = aws:signature_version_4_signing(DateTime, Credentials, Headers0,
                                               Payload, Service, Region),
     Headers1 = [{<<"accept-encoding">>, <<"identity">>},
                 {<<"content-type">>, <<"application/x-amz-json-1.0">>}|Headers],

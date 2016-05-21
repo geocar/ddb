@@ -1,10 +1,89 @@
 -module(aws).
 
--export([signature_version_4_signing/7]).
+-export([signature_version_4_signing/6]).
 
 -export([iso_8601_basic_format/1]).
 
 -include_lib("eunit/include/eunit.hrl").
+
+-export([endpoint/2, credentials/1, credentials/2]).
+
+-record(credentials, {
+  access_key_id :: binary(),
+  secret_access_key :: binary(),
+  token   :: 'undefined' | binary(),
+  expires :: 'undefined' | integer()
+}).
+
+-define(OVERLAPIAM, 300).
+
+-spec refresh_iam(#credentials{}, binary()) -> #credentials{}.
+refresh_iam(Credentials = #credentials{access_key_id = AccessKeyId, secret_access_key = SecretAccessKey}, Region) -> 
+    DateTime = aws:iso_8601_basic_format(os:timestamp()),
+    Service = <<"sts">>,
+    Endpoint = endpoint(Service, Region),
+
+    QueryString = <<"Action=GetSessionToken&AWSAccessKeyId=", AccessKeyId/binary,
+                   "&SignatureMethod=HmacSHA1&SignatureVersion=2&Timestamp=", DateTime/binary,
+                   "&Version=2011-06-15">>,
+    Payload = <<"GET\n/\n", QueryString/binary>>,
+    
+    Signature = base64:encode_to_string(crypto:hmac(sha, SecretAccessKey, Payload)),
+    Url = <<"https://", Endpoint/binary, "/?", QueryString/binary, "&Signature=", Signature>>,
+    case hackney:get(Url, [], [{pool, default}]) of
+      {ok, 200, _, ClientRef} ->
+          {ok, Body} = hackney:body(ClientRef),
+          NewToken = parse_iam_response(Body),
+          Expires = calendar:datetime_to_gregorian_seconds(iso8601:parse(proplists:get_value(expiration, NewToken))),
+          Credentials#credentials{
+            access_key_id = proplists:get_value(access_key_id, NewToken),
+            secret_access_key = proplists:get_value(secret_access_key, NewToken),
+            token = proplists:get_value(token, NewToken),
+            expires = Expires
+          };
+      _ -> Credentials
+    end.
+
+-include_lib("xmerl/include/xmerl.hrl").
+
+parse_iam_response(Body) ->
+    {Parsed, _Misc} = xmerl_scan:string(Body),
+    xmerl_xs:xslapply(fun iam_response_template/1,
+                      xmerl_xs:select("/GetSessionTokenResponse/GetSessionTokenResult/Credentials/*", Parsed)).
+
+iam_response_template(#xmlElement{name='SessionToken', content=[#xmlText{value=C}]})    -> {token, C};
+iam_response_template(#xmlElement{name='SecretAccessKey', content=[#xmlText{value=C}]}) -> {secret_access_key, C};
+iam_response_template(#xmlElement{name='AccessKeyId', content=[#xmlText{value=C}]})     -> {access_key_id, C};
+iam_response_template(#xmlElement{name='Expiration', content=[#xmlText{value=C}]})      -> {expiration, C}.
+
+
+-spec endpoint(binary(), binary()) -> binary().
+endpoint(Service, Region) ->
+    <<Service/binary, $., Region/binary, $., "amazonaws.com">>.
+
+
+-spec credentials(list({atom(),any()})) -> #credentials{}.
+
+credentials(Info) ->
+  Expires = calendar:datetime_to_gregorian_seconds(iso8601:parse(proplists:get_value(<<"Expiration">>, Info))),
+  #credentials{
+    access_key_id = proplists:get_value(<<"AccessKeyId">>, Info),
+    secret_access_key = proplists:get_value(<<"SecretAccessKey">>, Info),
+    token = proplists:get_value(<<"Token">>, Info),
+    expires = Expires
+  }.
+
+-spec credentials(#credentials{} | binary(), binary()) -> #credentials{}.
+
+credentials(Credentials = #credentials{ expires = Expires }, Region) when is_integer(Expires) ->
+  Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
+  case Now > Expires of true -> Credentials; false -> refresh_iam(Credentials, Region) end;
+
+credentials(AccessKeyId, SecretAccessKey) ->
+  #credentials{
+    access_key_id = AccessKeyId,
+    secret_access_key = SecretAccessKey
+  }.
 
 hmacsha256(Key, Sign) ->
   case erlang:function_exported(crypto, sha256_mac_n, 3) of
@@ -25,13 +104,16 @@ iso_8601_basic_format(Timestamp) ->
     list_to_binary(io_lib:format("~4.10.0B~2.10.0B~2.10.0BT~2.10.0B~2.10.0B~2.10.0BZ",
                                  [Year, Month, Day, Hour, Min, Sec])).
 
+headers(DateTime, #credentials{ token = Token }, Headers) when is_binary(Token) ->
+  [{<<"x-amz-security-token">>, Token}|headers(DateTime, [], Headers)];
+headers(DateTime, _, Headers) -> [{<<"x-amz-date">>, DateTime}|Headers].
 
--spec signature_version_4_signing(binary(), binary(), binary(), [{binary(), binary()}], binary(), binary(), binary()) -> [{binary(), binary()}]. 
-signature_version_4_signing(DateTime, AccessKeyId, SecretAccessKey, Headers, Payload, Service, Region) ->
-    %% TODO(nakai): x-amz-security-token
+-spec signature_version_4_signing(binary(), #credentials{}, [{binary(), binary()}], binary(), binary(), binary()) -> [{binary(), binary()}]. 
+signature_version_4_signing(DateTime, Credentials, Headers, Payload, Service, Region) ->
+    #credentials{ access_key_id = AccessKeyId, secret_access_key = SecretAccessKey } = Credentials,
 
-    Headers1 = [{<<"x-amz-date">>, DateTime}|Headers],
-    {CanonicalHeaders, SignedHeaders} = canonical_headers(Headers1),
+    ExtraHeaders = headers(DateTime, Credentials, Headers),
+    {CanonicalHeaders, SignedHeaders} = canonical_headers(ExtraHeaders),
     Request = canonical_request(<<"POST">>, <<$/>>, <<>>, CanonicalHeaders, SignedHeaders, Payload),
     CredentialScope = credential_scope(DateTime, Region, Service),
 
@@ -40,7 +122,7 @@ signature_version_4_signing(DateTime, AccessKeyId, SecretAccessKey, Headers, Pay
     SigningKey = signing_key(SecretAccessKey, DateTime, Region, Service),
     Signature = base16(hmacsha256(SigningKey, ToSign)),
     Authorization = authorization(AccessKeyId, CredentialScope, SignedHeaders, Signature),
-    [{<<"Authorization">>, Authorization}|Headers1].
+    [{<<"Authorization">>, Authorization}|ExtraHeaders].
 
 
 to_sign(Datetime, CredentialScope, Request) ->
@@ -94,7 +176,7 @@ signing_key(SecretAccessKey, DateTime, Region, Service) ->
     KSigning.
 
 
--spec trimall(binary()) -> binary().
+
 trimall(Value) ->
     TrimedValue = re:replace(Value, <<"(^\\s+)|(\\s+$)">>, <<>>, [global, {return, binary}]),
     %% XXX(nakai): "" で囲まれているっぽい文字があったら、Trim で終わらせる
@@ -211,7 +293,7 @@ signature_version_4_signing_test() ->
 
     Payload = <<"Action=ListUsers&Version=2010-05-08">>,
 
-    Headers1 = signature_version_4_signing(DateTime, AccessKeyId, SecretAccessKey, Headers, Payload, Service, Region),
+    Headers1 = signature_version_4_signing(DateTime, credentials(AccessKeyId, SecretAccessKey), Headers, Payload, Service, Region),
 
     ?assertEqual(<<"AWS4-HMAC-SHA256 ",
                    "Credential=AKIDEXAMPLE/20110909/us-east-1/iam/aws4_request,",
