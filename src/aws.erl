@@ -17,7 +17,7 @@
   expires   :: integer()
 }).
 
--define(OVERLAPIAM, 300).
+-define(OVERLAPIAM, 3600).
 
 -spec endpoint(binary(), binary()) -> binary().
 endpoint(Service, Region) ->
