@@ -217,15 +217,15 @@ create_table(Config, TableName, Keys) ->
             error(Reason)
     end.
 create_table(Config, TableName, AttributeName, KeyType) ->
-    create_table(Config, TableName, [{AttributeName, KeyType}]).
+    create_table(Config, TableName, [{AttributeName, <<"S">>, KeyType}]).
 
-attribute_definition_payload({AttributeName,_}) ->
+attribute_definition_payload({AttributeName,AttributeType,_}) ->
     [
         {<<"AttributeName">>, AttributeName},
-        {<<"AttributeType">>, <<"S">>}
+        {<<"AttributeType">>, AttributeType}
     ].
 
-key_schema_payload({AttributeName,KeyType}) ->
+key_schema_payload({AttributeName,_,KeyType}) ->
     [
         {<<"AttributeName">>, AttributeName},
         {<<"KeyType">>, KeyType}
