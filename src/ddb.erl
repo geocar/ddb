@@ -102,7 +102,7 @@ put_item(Config, TableName, Item) ->
         {ok, _Json} ->
             ok;
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             {error, Reason}
     end.
 
@@ -149,7 +149,7 @@ get_item_request(Config, Target, Payload) ->
             %% XXX(nakai): Item はあえて出している
             cast_item(proplists:get_value(<<"Item">>, Json));
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
 
@@ -201,7 +201,7 @@ list_tables(Config) ->
         {ok, Json} ->
             proplists:get_value(<<"TableNames">>, Json);
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
 
@@ -213,7 +213,7 @@ create_table(Config, TableName, Keys) ->
         {ok, _Json} ->
             ok;
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
 create_table(Config, TableName, AttributeName, KeyType) ->
@@ -267,7 +267,7 @@ delete_item(Config, TableName, KV) ->
         {ok, _Json} ->
             ok;
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
 
@@ -302,7 +302,7 @@ update_item(Config, TableName, KTV, AttributeUpdates) ->
         {ok, _Json} ->
             ok;
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
 
@@ -380,7 +380,7 @@ scan_request(Config, Target, Payload) ->
             LastEvaluatedKey = proplists:get_value(<<"LastEvaluatedKey">>, Json, undefined),
             {cast_items(Items), cast_last_evaluated_key(LastEvaluatedKey)};
         {error, Reason} ->
-            ?debugVal(Reason),
+            %?debugVal(Reason),
             error(Reason)
     end.
  
