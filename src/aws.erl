@@ -28,7 +28,7 @@ endpoint(Service, Region) ->
 credentials(Name) when is_binary(Name) -> credentials(imds:iam(Name));
 credentials(Credentials = #credentials{ expires = Expires, imds_role = Name }) when is_integer(Expires) ->
   Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
-  case Now > Expires of true -> Credentials; false -> credentials(imds:iam(Name)) end;
+  case Now < Expires of true -> Credentials; false -> credentials(imds:iam(Name)) end;
 credentials(Credentials = #credentials{}) -> Credentials;
 credentials(Info) ->
   Expiration = proplists:get_value(<<"Expiration">>, Info),
