@@ -94,6 +94,13 @@ success() ->
     ?assertEqual(not_found,
                  ddb:get_item(C, <<"users">>, <<"user_id">>, <<"USER-ID">>)),
     ?assertEqual(ok,
+                 ddb:batch_write_item(C, <<"users">>, [
+                                      [{<<"user_id">>, <<"wat">>}, {<<"password">>, <<"dude">>}],
+                                      [{<<"user_id">>, <<"for">>}, {<<"password">>, <<"cows">>}]
+                 ])),
+    ?assertEqual(lists:sort([[{<<"user_id">>,<<"for">>},{<<"password">>,<<"cows">>}],[{<<"user_id">>,<<"wat">>},{<<"password">>,<<"dude">>}]]),
+                 lists:sort(ddb:scan(C,<<"users">>))),
+    ?assertEqual(ok,
 		 ddb:delete_table(C, <<"users">>)),
 
     ok.

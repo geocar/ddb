@@ -12,6 +12,8 @@
 -export([update_item/5, update_item/4]).
 -export([scan/2, scan/3, scan/4, scan/6]).
 
+-export([batch_write_item/3]).
+
 -export_type([config/0]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -93,6 +95,21 @@ connection_local(Host, Port) ->
        is_secure = false
       }.
 
+-spec batch_write_item(#ddb_config{}, binary(), [[{binary(), binary()}]]) -> ok.
+batch_write_item(Config, TableName, Items) ->
+    Target = x_amz_target(batch_write_item),
+    Payload = batch_write_item_payload(TableName, Items),
+    case post(Config, Target, Payload) of
+        {ok, _Json} ->
+            ok;
+        {error, Reason} ->
+            %?debugVal(Reason),
+            {error, Reason}
+    end.
+
+batch_write_item_payload(TableName, Objects) ->
+    Json = [{<<"RequestItems">>, [{TableName, lists:map(fun(Items) -> [{<<"PutRequest">>, [{<<"Item">>, typed_item(Items)}] }] end, Objects) }] }],
+    json_encode(Json).
 
 -spec put_item(#ddb_config{}, binary(), [{binary(), binary()}]) -> ok.
 put_item(Config, TableName, Item) ->
@@ -407,9 +424,9 @@ cast_attribute({AttributeName, [{_T, V}]}) ->
 
 -spec x_amz_target(atom()) -> binary().
 x_amz_target(batch_get_item) ->
-    error(not_implemented);
+    <<"DynamoDB_20120810.BatchGetItem">>;
 x_amz_target(batch_write_item) ->
-    error(not_implemented);
+    <<"DynamoDB_20120810.BatchWriteItem">>;
 x_amz_target(create_table) ->
     <<"DynamoDB_20120810.CreateTable">>;
 x_amz_target(delete_item) ->
