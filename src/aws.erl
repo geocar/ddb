@@ -12,33 +12,31 @@
   access_key_id     = <<"WHATEVER">> :: binary(),
   secret_access_key = <<"WHATEVER">> :: binary(),
 
-  imds_role :: binary(),
   token     :: binary(),
-  expires   :: integer()
+  imds_role :: binary(),
+  iam       :: pid()
 }).
-
--define(OVERLAPIAM, 3600).
 
 -spec endpoint(binary(), binary()) -> binary().
 endpoint(Service, Region) ->
     <<Service/binary, $., Region/binary, $., "amazonaws.com">>.
 
 
--spec credentials(binary() | #credentials{} | list({atom(),any()})) -> #credentials{}.
-credentials(Name) when is_binary(Name) -> credentials(imds:iam(Name));
-credentials(Credentials = #credentials{ expires = Expires, imds_role = Name }) when is_integer(Expires) ->
-  Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()) - ?OVERLAPIAM,
-  case Now < Expires of true -> Credentials; false -> credentials(imds:iam(Name)) end;
-credentials(Credentials = #credentials{}) -> Credentials;
-credentials(Info) ->
-  Expiration = proplists:get_value(<<"Expiration">>, Info),
-  #credentials{
-    access_key_id = proplists:get_value(<<"AccessKeyId">>, Info),
-    secret_access_key = proplists:get_value(<<"SecretAccessKey">>, Info),
-    imds_role = proplists:get_value(<<"Name">>, Info),
-    token = proplists:get_value(<<"Token">>, Info),
-    expires = (case is_binary(Expiration) of true -> calendar:datetime_to_gregorian_seconds(iso8601:parse(Expiration)); _ -> undefined end)
-  }.
+-spec credentials(binary() | #credentials{} | {term(),{binary(),binary(),binary(),binary()}}) -> #credentials{}.
+credentials(Name) when is_binary(Name) -> credentials(#credentials{ imds_role = Name });
+credentials(Credentials = #credentials{ iam = IAM }) when is_pid(IAM) ->
+  receive
+    {IAM, C} -> credentials({IAM,C})
+  after 0 ->
+    Credentials
+  end;
+credentials(#credentials{ imds_role = Name } ) ->
+  IAM = spawn_link(imds, iam, [self(), Name]),
+  receive
+    {IAM, C} -> credentials({IAM,C})
+  end;
+credentials({Pid,{Access,Secret,Token,Name}}) ->
+	#credentials{ access_key_id = Access, secret_access_key = Secret, token = Token, imds_role = Name, iam = Pid }.
 
 credentials(AccessKeyId, SecretAccessKey) ->
   #credentials{
