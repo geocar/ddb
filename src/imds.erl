@@ -17,7 +17,7 @@ iam(P, Name) ->
   Now = calendar:datetime_to_gregorian_seconds(erlang:universaltime()),
   Expiration = proplists:get_value(<<"Expiration">>, Info),
   Expires = case is_binary(Expiration) of true -> calendar:datetime_to_gregorian_seconds(iso8601:parse(Expiration)); _ -> Now + 600 end,
-  P!{self(), {proplists:get_value(<<"AccessKeyId">>, Info),
+  P!{self(), iamChange, {proplists:get_value(<<"AccessKeyId">>, Info),
     proplists:get_value(<<"SecretAccessKey">>, Info),
     proplists:get_value(<<"Token">>, Info),
     proplists:get_value(<<"Name">>, Info)}},
