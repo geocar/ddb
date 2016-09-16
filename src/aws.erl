@@ -24,19 +24,19 @@ endpoint(Service, Region) ->
 
 -spec credentials(binary() | #credentials{} | {term(),{binary(),binary(),binary(),binary()}}) -> #credentials{}.
 credentials(Name) when is_binary(Name) -> credentials(#credentials{ imds_role = Name });
-credentials(Credentials = #credentials{ iam = IAM }) when is_pid(IAM) ->
+credentials(Credentials = #credentials{ iam = Pid }) when is_pid(Pid) ->
   receive
-    {IAM, iamChange, C} -> credentials({IAM,C})
+    {Pid, iamChange, {Access,Secret,Token,Name}} ->
+			Credentials#credentials{ access_key_id = Access, secret_access_key = Secret, token = Token, imds_role = Name }
   after 0 ->
     Credentials
   end;
-credentials(#credentials{ imds_role = Name } ) ->
-  IAM = spawn_link(imds, iam, [self(), Name]),
+credentials(Credentials = #credentials{ imds_role = Name } ) ->
+  Pid = spawn_link(imds, iam, [self(), Name]),
   receive
-    {IAM, iamChange, C} -> credentials({IAM,C})
-  end;
-credentials({Pid,{Access,Secret,Token,Name}}) ->
-	#credentials{ access_key_id = Access, secret_access_key = Secret, token = Token, imds_role = Name, iam = Pid }.
+    {Pid , iamChange, {Access,Secret,Token,Name}} ->
+			Credentials#credentials{ access_key_id = Access, secret_access_key = Secret, token = Token, iam = Pid }
+  end.
 
 credentials(AccessKeyId, SecretAccessKey) ->
   #credentials{
